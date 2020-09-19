@@ -11,9 +11,12 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <unordered_map>
+
+#include <boost/exception/all.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 #include <inference_engine.hpp>
-
 // #include <monitors/presenter.h>
 #include <server/PersonPipeline/slog.hpp>
 #include <server/PersonPipeline/ocv_common.hpp>
@@ -465,6 +468,22 @@ struct Load {
 
 class PersonPipeline::Impl{
 public:
+    struct ROI{
+        unsigned x;
+        unsigned y;
+        unsigned w;
+        unsigned h;
+        std::string attrib;
+    };
+
+    struct Result{
+        using ROIVec = std::vector<ROI>;
+        ROIVec rois;
+        std::string imageName;
+    };
+
+    using ResultVec = std::vector<Result>;
+
     Impl();
 
     ~Impl();
@@ -474,6 +493,8 @@ public:
     std::string run(const char* input, std::size_t size);
 
 private:
+    std::string constructJsonMessage(const ResultVec& results) const;
+
     PersonDetection m_personDetection;
     PersonAttribsDetection m_personAttribs;
     // PersonReIdentification m_personReId;
@@ -844,6 +865,7 @@ bool PersonPipeline::Impl::init(){
 }
 
 std::string PersonPipeline::Impl::run(const char* input, std::size_t size){
+    std::string jsonOut = "";
     try{
         ::cv::Mat rawData( 1, size, CV_8UC1, (void*)input );
 
@@ -899,6 +921,7 @@ std::string PersonPipeline::Impl::run(const char* input, std::size_t size){
             // --------------------------- Process the results down to the pipeline ----------------------------
             ms personAttribsNetworkTime(0), personReIdNetworktime(0);
             int personAttribsInferred = 0,  personReIdInferred = 0;
+            Result res;
             for (auto && result : m_personDetection.results) {
                 if (result.label == 1) {  // person
                     // if (FLAGS_auto_resize) {
@@ -1029,6 +1052,13 @@ std::string PersonPipeline::Impl::run(const char* input, std::size_t size){
                             std::cout << "Person Attributes results: " << output_attribute_string << std::endl;
                             std::cout << "Person top color: " << resPersAttrAndColor.top_color << std::endl;
                             std::cout << "Person bottom color: " << resPersAttrAndColor.bottom_color << std::endl;
+                            ROI roi;
+                            roi.x = result.location.x;
+                            roi.y = result.location.y;
+                            roi.w = result.location.width;
+                            roi.h = result.location.height;
+                            roi.attrib = output_attribute_string;
+                            res.rois.push_back(roi);
                         // }
                     }
                     // if (!resPersReid.empty()) {
@@ -1046,6 +1076,9 @@ std::string PersonPipeline::Impl::run(const char* input, std::size_t size){
                     // cv::rectangle(frame, result.location, cv::Scalar(0, 255, 0), 1);
                 }
             }
+            res.imageName = "TestName";
+            jsonOut = constructJsonMessage(ResultVec{res});
+            std::cout << jsonOut << std::endl;
 
             // presenter.drawGraphs(frame);
 
@@ -1119,13 +1152,42 @@ std::string PersonPipeline::Impl::run(const char* input, std::size_t size){
     }
     catch (const std::exception& error) {
         std::cerr << "[ ERROR ] " << error.what() << std::endl;
-        return "";
     }
     catch (...) {
         std::cerr << "[ ERROR ] Unknown/internal exception happened." << std::endl;
+    }
+    return jsonOut;
+}
+
+std::string PersonPipeline::Impl::constructJsonMessage(const ResultVec& results) const{
+    boost::property_tree::ptree jsonTree;
+
+    for(const auto& frame: results){
+        boost::property_tree::ptree frameNode;
+
+        for(const auto& roi: frame.rois){
+            boost::property_tree::ptree roiNode;
+            roiNode.put("x", roi.x);
+            roiNode.put("y", roi.y);
+            roiNode.put("width", roi.w);
+            roiNode.put("height", roi.h);
+            roiNode.put("attributes", roi.attrib);
+
+            frameNode.push_back(std::make_pair("", roiNode));
+        }
+        if(!frameNode.empty()){
+            jsonTree.add_child(frame.imageName, frameNode);
+        }
+    }
+
+    if(jsonTree.empty()){
         return "";
     }
-    return "";
+    else{
+        std::stringstream ss;
+        boost::property_tree::json_parser::write_json(ss, jsonTree);
+        return ss.str();
+    }
 }
 
 PersonPipeline::PersonPipeline(){
