@@ -1,0 +1,34 @@
+project(SISD)
+
+cmake_minimum_required(VERSION 3.5)
+set(CMAKE_CXX_STANDARD 11)
+
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+if (WIN32)
+    set(SISD_COMPILER_FLAGS "/GS")
+	set(SISD_SHARED_LINKER_FLAGS "/DYNAMICBASE /NXCOMPAT")
+	set(SISD_EXE_LINKER_FLAGS "/ALLOWISOLATION")
+elseif (UNIX)
+	set(SISD_COMPILER_FLAGS "-Wformat -Wformat-security -Werror=format-security -D_FORTIFY_SOURCE=2 -fstack-protector-strong -fno-strict-overflow -fwrapv -fno-delete-null-pointer-checks -fPIE -fPIC")
+	set(SISD_SHARED_LINKER_FLAGS "-z relro -z now -z noexecstack")
+endif()
+set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${SISD_COMPILER_FLAGS}")
+set(CMAKE_C_FLAGS  "${CMAKE_C_FLAGS} ${SISD_COMPILER_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${SISD_SHARED_LINKER_FLAGS} ${SISD_EXE_LINKER_FLAGS}")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${SISD_SHARED_LINKER_FLAGS}")
+
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
+  if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+  endif()
+endif()
+
+find_package(Boost 1.71.0 REQUIRED COMPONENTS filesystem)
+
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
+add_subdirectory(source)
