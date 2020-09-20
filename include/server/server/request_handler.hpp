@@ -13,6 +13,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include <boost/noncopyable.hpp>
 
 namespace http {
@@ -47,6 +48,8 @@ private:
   static bool retrieveFilenameFromMultiPartMessage(const std::string& in, std::string& out);
 
   static bool retrieveImageFromMultiPartMessage(const std::string& in, std::string& out);
+
+  static bool combineJsonResults(const std::vector<std::string>& results, std::stringstream& resultss);
 };
 
 } // namespace server

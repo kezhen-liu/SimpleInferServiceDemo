@@ -23,6 +23,9 @@
 #include <thread>
 #include <memory>
 
+#include <server/PersonPipeline/PersonPipeline.hpp>
+#include <common/utility/base64.h>
+
 // namespace AiInferenceServer
 // {
 //   typedef int Status_t;
@@ -106,63 +109,25 @@ void request_handler::handle_request(const request& req, reply& rep)
     return;
   }
 
+  SISD::PersonPipeline person;
+  person.init();
+
+  std::vector<std::string> results;
+  std::stringstream replyData;
   for(const auto& iter : images){
     std::cout<<"Filename: "<<iter.first<<std::endl;
     std::cout<<"Image data: "<<std::endl;
     std::cout<<iter.second<<std::endl;
+
+    std::string base64(iter.second);
+    base64.shrink_to_fit();
+
+    std::string decoded = base64_decode(base64, true);
+
+    results.push_back(person.run(decoded.data(), decoded.length()));
   }
+  combineJsonResults(results, replyData);
 
-  // std::cout<<"\r\n\r\n"<<std::endl;
-  // std::cout<<req.jsonData<<std::endl;
-
-  // boost::property_tree::ptree rootReceive;
-  // std::stringstream receiveData(req.jsonData);
-  
-  // try{
-  //   boost::property_tree::read_json(receiveData, rootReceive);
-  // }
-  // catch(std::exception&e)
-  // {
-  //   std::cout<<"Failed to parse json from string"<<std::endl;
-  // }
- 
-  // std::string functionName = rootReceive.get<std::string>("FunctionName");
-  // if(functionName.compare("Run") == 0)
-  // {
-  //   std::cout<<"Server : extract parameters and call function:"<<functionName<<std::endl;
-  //   std::vector<std::string> mediaUris;
-  //   for(boost::property_tree::ptree::value_type& mediaUri : rootReceive.get_child("Arguments.In.mediaUri"))
-  //   {
-  //     mediaUris.push_back(mediaUri.second.data());
-  //   }
-  //   std::string pipelineConfig = rootReceive.get<std::string>("Arguments.In.pipelineConfig");
-
-  //   void* outputResult;
-  //   size_t outputResultSize;
-  //   int ret = AiInferenceServer::Run(mediaUris, pipelineConfig, outputResult, outputResultSize);
-    
-  //   float* floatBuffer = static_cast<float*>(outputResult);
-  //   size_t dataNum = outputResultSize/4;
-  //   boost::property_tree::ptree resultDataNode;
-  //   for (unsigned dataIndex=0; dataIndex < dataNum; ++dataIndex)
-  //   {
-  //     std::string s = std::to_string(floatBuffer[dataIndex]);
-  //     boost::property_tree::ptree singleDataNode;
-  //     singleDataNode.put("", s);
-  //     resultDataNode.push_back(std::make_pair("", singleDataNode));
-  //   }
-
-  //   free(outputResult);
-    
-  //   rootReceive.add_child("Arguments.Out.resultData", resultDataNode);
-  //   rootReceive.put<int>("Arguments.Out.resultDataSize", outputResultSize);
-  //   rootReceive.put<int>("Arguments.Return.Status_t", ret);
-  // }
-
-  //It should be can the related function and fill data into json and send back to client.
-  std::stringstream replyData;
-  // boost::property_tree::write_json(replyData, rootReceive);
-  replyData << "Test response";
   std::string stringReplyData = replyData.str();
   // rep.content.append("jsonDataBegin:\n");
   rep.content.append(stringReplyData);
@@ -318,7 +283,16 @@ bool request_handler::retrieveImageFromMultiPartMessage(const std::string& in, s
   if(endIdx == std::string::npos){
     return false;
   }
-  out = in.substr(startIdx, endIdx-startIdx+1);
+  out = in.substr(startIdx, endIdx-startIdx);
+  return true;
+}
+
+bool request_handler::combineJsonResults(const std::vector<std::string>& results, std::stringstream& resultss){
+  resultss<<"{\n";
+  for(const auto& iter : results){
+    resultss << iter.substr(2, iter.length()-4);
+  }
+  resultss<<"}\n";
   return true;
 }
 
