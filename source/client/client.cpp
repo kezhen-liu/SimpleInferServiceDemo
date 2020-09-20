@@ -116,39 +116,48 @@ Client::Impl::~Impl(){
 }
 
 Client::Request Client::Impl::formRequest(const FilepathVec& filePath, const RequestType& type){
-    if(filePath.empty()){
-        std::cerr << "File path is empty!" << std::endl;
-        return Request();
-    }
+    if(type == Client::Person){
+        if(filePath.empty()){
+            std::cerr << "File path is empty!" << std::endl;
+            return Request();
+        }
 
-    bool valid = true;
-    for(const auto& file: filePath){
-        boost::filesystem::path fpath(file);
-        try{
-            if(boost::filesystem::exists(fpath)){
-                if (!boost::filesystem::is_regular_file(fpath)){
-                    std::cerr << "File " << fpath.string() << "is not a regular file!" << std::endl;
+        bool valid = true;
+        for(const auto& file: filePath){
+            boost::filesystem::path fpath(file);
+            try{
+                if(boost::filesystem::exists(fpath)){
+                    if (!boost::filesystem::is_regular_file(fpath)){
+                        std::cerr << "File " << fpath.string() << "is not a regular file!" << std::endl;
+                        valid = false;
+                        break;
+                    }
+                }
+                else{
+                    std::cerr << "Path " << fpath.string() << " does not exist"<< std::endl;
                     valid = false;
                     break;
                 }
             }
-            else{
-                std::cerr << "Path " << fpath.string() << " does not exist"<< std::endl;
+            catch (const boost::filesystem::filesystem_error& ex)
+            {
+                std::cerr << "Encountered an error of " << ex.what() << " upon opening " << fpath.string() << std::endl;;
                 valid = false;
                 break;
             }
         }
-        catch (const boost::filesystem::filesystem_error& ex)
-        {
-            std::cerr << "Encountered an error of " << ex.what() << " upon opening " << fpath.string() << std::endl;;
-            valid = false;
-            break;
+        if(valid){
+            return Request(filePath, type);
+        }
+        else{
+            return Request();
         }
     }
-    if(valid){
+    else if(type == Client::History){
         return Request(filePath, type);
     }
     else{
+        // invalid type
         return Request();
     }
 }
@@ -165,143 +174,131 @@ std::string Client::Impl::sendRequest(const Client::Request& req){
         boost::asio::ip::tcp::socket socket(io_context);
         boost::asio::connect(socket, endpoints);
 
-        std::stringstream msgBody;
-        for(const auto& singlePath: req.filePath()){
-            boost::filesystem::path fpath(singlePath);
-            std::string shortFilename = fpath.filename().string();
+        if(req.type() == Client::Person){
+            std::stringstream msgBody;
+            for(const auto& singlePath: req.filePath()){
+                boost::filesystem::path fpath(singlePath);
+                std::string shortFilename = fpath.filename().string();
 
-            std::ifstream fileIn(singlePath, std::ios::binary | std::ios::ate);
-            if(!fileIn){
-                std::cerr << "Unable to open file!" << std::endl;
-                exit(0);
+                std::ifstream fileIn(singlePath, std::ios::binary | std::ios::ate);
+                if(!fileIn){
+                    std::cerr << "Unable to open file!" << std::endl;
+                    exit(0);
+                }
+                std::streamsize size = fileIn.tellg();
+                fileIn.seekg(0, std::ios::beg);
+
+                char* data = new char[size];
+                if (!fileIn.read(data, size))
+                {
+                    std::cerr << "Error reading contents!" << std::endl;
+                    exit(0);
+                }
+                fileIn.close();
+
+                std::string base64 = base64_encode(reinterpret_cast<const unsigned char*>(data), size);
+
+                delete[] data;
+
+                msgBody << "--77580b83-390b-4c34-8393-4eac360c7b42\r\n";
+                msgBody << "Content-Disposition: form-data; name=\"datafile\"; filename=\"" << shortFilename <<"\"\r\n";
+                msgBody << "Content-Type: image/jpeg\r\n\r\n";
+                msgBody << base64 << "\r\n";
             }
-            std::streamsize size = fileIn.tellg();
-            fileIn.seekg(0, std::ios::beg);
+            msgBody << "--77580b83-390b-4c34-8393-4eac360c7b42--\r\n";
 
-            char* data = new char[size];
-            if (!fileIn.read(data, size))
+            std::string stringRequestData = msgBody.str();
+            
+            // Form the request. We specify the "Connection: close" header so that the
+            // server will close the socket after transmitting the response. This will
+            // allow us to treat all data up until the EOF as the content.
+            boost::asio::streambuf request;
+            std::ostream request_stream(&request);
+            request_stream << "POST " << "/predict" << " HTTP/1.0\r\n";
+            // request_stream << "Host: " << "localhost" << "\r\n";
+            request_stream << "Accept: */*\r\n";
+            request_stream << "Content-Length: " << stringRequestData.length() << "\r\n";
+            request_stream << "Content-Type: multipart/form-data; boundary=77580b83-390b-4c34-8393-4eac360c7b42\r\n";
+            request_stream << "Connection: close\r\n\r\n";
+            request_stream << stringRequestData;
+
+            std::stringstream testss;
+            testss << "POST " << "/predict" << " HTTP/1.0\r\n";
+            // testss << "Host: " << "localhost" << "\r\n";
+            testss << "Accept: */*\r\n";
+            testss << "Content-Length: " << stringRequestData.length() << "\r\n";
+            testss << "Content-Type: multipart/form-data; boundary=77580b83-390b-4c34-8393-4eac360c7b42\r\n";
+            testss << "Connection: close\r\n\r\n";
+            testss << stringRequestData;
+
+            std::cout<<"\r\n\r\nGoing to send "<<testss.str().length()<< std::endl;
+            std::cout<<testss.str()<<"end\r\n\r\n"<<std::endl;
+
+            // Send the request.
+            boost::asio::write(socket, request);
+
+            // Read the response status line. The response streambuf will automatically
+            // grow to accommodate the entire line. The growth may be limited by passing
+            // a maximum size to the streambuf constructor.
+            boost::asio::streambuf response;
+            // boost::asio::read_until(socket, response, "jsonDataEnd.");
+            boost::system::error_code ec;
+            boost::asio::read(socket, response, boost::asio::transfer_all(), ec);
+            if(ec == boost::asio::error::eof){
+                ec.clear();
+            }
+            else
             {
-                std::cerr << "Error reading contents!" << std::endl;
-                exit(0);
+                throw ec;
             }
-            fileIn.close();
-
-            std::string base64 = base64_encode(reinterpret_cast<const unsigned char*>(data), size);
-
-            delete[] data;
-
-            msgBody << "--77580b83-390b-4c34-8393-4eac360c7b42\r\n";
-            msgBody << "Content-Disposition: form-data; name=\"datafile\"; filename=\"" << shortFilename <<"\"\r\n";
-            msgBody << "Content-Type: image/jpeg\r\n\r\n";
-            msgBody << base64 << "\r\n";
+            
+            // Check that response is OK.
+            std::istream response_stream(&response);
+            return std::string(std::istreambuf_iterator<char>(response_stream), {});
         }
-        msgBody << "--77580b83-390b-4c34-8393-4eac360c7b42--\r\n";
+        else if(req.type() == Client::History){
+            // Form the request. We specify the "Connection: close" header so that the
+            // server will close the socket after transmitting the response. This will
+            // allow us to treat all data up until the EOF as the content.
+            boost::asio::streambuf request;
+            std::ostream request_stream(&request);
+            request_stream << "GET " << "/history" << " HTTP/1.0\r\n";
+            // request_stream << "Host: " << "localhost" << "\r\n";
+            request_stream << "Accept: */*\r\n";
+            request_stream << "Connection: close\r\n\r\n";
 
-        std::string stringRequestData = msgBody.str();
-        
-        // Form the request. We specify the "Connection: close" header so that the
-        // server will close the socket after transmitting the response. This will
-        // allow us to treat all data up until the EOF as the content.
-        boost::asio::streambuf request;
-        std::ostream request_stream(&request);
-        request_stream << "POST " << "/predict" << " HTTP/1.0\r\n";
-        // request_stream << "Host: " << "localhost" << "\r\n";
-        request_stream << "Accept: */*\r\n";
-        request_stream << "Content-Length: " << stringRequestData.length() << "\r\n";
-        request_stream << "Content-Type: multipart/form-data; boundary=77580b83-390b-4c34-8393-4eac360c7b42\r\n";
-        request_stream << "Connection: close\r\n\r\n";
-        request_stream << stringRequestData;
+            std::stringstream testss;
+            testss << "GET " << "/history" << " HTTP/1.0\r\n";
+            // testss << "Host: " << "localhost" << "\r\n";
+            testss << "Accept: */*\r\n";
+            testss << "Connection: close\r\n\r\n";
 
-        std::stringstream testss;
-        testss << "POST " << "/predict" << " HTTP/1.0\r\n";
-        // testss << "Host: " << "localhost" << "\r\n";
-        testss << "Accept: */*\r\n";
-        testss << "Content-Length: " << stringRequestData.length() << "\r\n";
-        testss << "Content-Type: multipart/form-data; boundary=77580b83-390b-4c34-8393-4eac360c7b42\r\n";
-        testss << "Connection: close\r\n\r\n";
-        testss << stringRequestData;
+            std::cout<<"\r\n\r\nGoing to send "<<testss.str().length()<< std::endl;
+            std::cout<<testss.str()<<"end\r\n\r\n"<<std::endl;
 
-        std::cout<<"\r\n\r\nGoing to send "<<testss.str().length()<< std::endl;
-        std::cout<<testss.str()<<"end\r\n\r\n"<<std::endl;
+            // Send the request.
+            boost::asio::write(socket, request);
 
-        // Send the request.
-        boost::asio::write(socket, request);
-
-        // Read the response status line. The response streambuf will automatically
-        // grow to accommodate the entire line. The growth may be limited by passing
-        // a maximum size to the streambuf constructor.
-        boost::asio::streambuf response;
-        // boost::asio::read_until(socket, response, "jsonDataEnd.");
-        boost::system::error_code ec;
-        boost::asio::read(socket, response, boost::asio::transfer_all(), ec);
-        if(ec == boost::asio::error::eof){
-            ec.clear();
+            // Read the response status line. The response streambuf will automatically
+            // grow to accommodate the entire line. The growth may be limited by passing
+            // a maximum size to the streambuf constructor.
+            boost::asio::streambuf response;
+            // boost::asio::read_until(socket, response, "jsonDataEnd.");
+            boost::system::error_code ec;
+            boost::asio::read(socket, response, boost::asio::transfer_all(), ec);
+            if(ec == boost::asio::error::eof){
+                ec.clear();
+            }
+            else
+            {
+                throw ec;
+            }
+            
+            // Check that response is OK.
+            std::istream response_stream(&response);
+            return std::string(std::istreambuf_iterator<char>(response_stream), {});
         }
-        else
-        {
-            throw ec;
-        }
-        
-        // Check that response is OK.
-        std::istream response_stream(&response);
-        return std::string(std::istreambuf_iterator<char>(response_stream), {});
-        // std::string http_version;
-        // response_stream >> http_version;
-        // unsigned int status_code;
-        // response_stream >> status_code;
-        // std::string status_message;
-        // std::getline(response_stream, status_message);
-        // if (!response_stream || http_version.substr(0, 5) != "HTTP/")
-        // {
-        // std::cout << "Invalid response\n";
-        // return 1;
-        // }
-        // if (status_code != 200)
-        // {
-        // std::cout << "Response returned with status code " << status_code << "\n";
-        // return 1;
-        // }
 
-        // // Process the response headers.
-        // std::string header;
-        // while (std::getline(response_stream, header) && header != "\r")
-        // std::cout << header << "\n";
-        // std::cout << "\n";
-
-        // std::stringstream jsonDataSS;
-        // if (response.size() > 0)
-        // {
-        // std::string jsonDataBeginMarker;
-        // response_stream >> jsonDataBeginMarker;
-        // std::string jsonData;
-        // while (std::getline(response_stream, jsonData) && jsonData != "jsonDataEnd.")
-        // {
-        //     jsonDataSS << jsonData;
-        // }
-        // }
-
-        // boost::property_tree::ptree rootDataFromServer;
-
-        // try{
-        // boost::property_tree::read_json(jsonDataSS, rootDataFromServer);
-        // }
-        // catch(std::exception&e)
-        // {
-        // std::cout<<"Failed to parse json from string"<<std::endl;
-        // }
-
-        // std::string resultData = rootDataFromServer.get<std::string>("Arguments.Out.resultData");
-        // resultSize = resultData.size(); 
-
-        // char * buffer  =  (char*)malloc(resultSize);
-        // if (buffer == NULL)
-        // exit (1);
-
-        // for(size_t index(0); index < resultSize; ++index)
-        // {
-        // buffer[index] = resultData[index];
-        // }
-        // result = static_cast<void*>(buffer);
     }
     catch (std::exception& e)
     {

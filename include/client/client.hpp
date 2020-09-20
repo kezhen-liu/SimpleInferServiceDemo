@@ -15,6 +15,7 @@ public:
         Person = 0,
         Vehicle,
         Both,
+        History,
         Invalid
     }; 
 

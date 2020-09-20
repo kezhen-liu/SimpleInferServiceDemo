@@ -25,6 +25,7 @@
 
 #include <server/PersonPipeline/PersonPipeline.hpp>
 #include <common/utility/base64.h>
+#include <server/database/historyStorage.hpp>
 
 // namespace AiInferenceServer
 // {
@@ -83,62 +84,88 @@ void request_handler::handle_request(const request& req, reply& rep)
   std::cout<<"Received HTTP method: "<< req.method << std::endl;
   // Request path must be absolute and not contain "..".
   if (request_path.empty() || request_path[0] != '/'
-      || request_path.find("..") != std::string::npos || request_path != "/predict")
+      || request_path.find("..") != std::string::npos)
   {
     rep = reply::stock_reply(reply::bad_request);
     return;
   }
 
-  std::string boundary = "";
-  for(const auto& iter : req.headers){
-    if(iter.name == "Content-Type"){
-      if(!retrieveMultipartBoundary(iter.value, boundary)){
-        rep = reply::stock_reply(reply::bad_request);
-        return;
+  if(request_path == "/predict"){
+    std::string boundary = "";
+    for(const auto& iter : req.headers){
+      if(iter.name == "Content-Type"){
+        if(!retrieveMultipartBoundary(iter.value, boundary)){
+          rep = reply::stock_reply(reply::bad_request);
+          return;
+        }
       }
     }
+    if(boundary==""){
+      rep = reply::stock_reply(reply::bad_request);
+      return;
+    }
+
+    std::unordered_map<std::string, std::string> images;
+    if(!retrieveImages(boundary, req.jsonData, images)){
+      rep = reply::stock_reply(reply::bad_request);
+      return;
+    }
+
+    SISD::PersonPipeline person;
+    person.init();
+
+    std::vector<std::string> results;
+    std::stringstream replyData;
+    for(const auto& iter : images){
+      std::cout<<"Filename: "<<iter.first<<std::endl;
+      std::cout<<"Image data: "<<std::endl;
+      std::cout<<iter.second<<std::endl;
+
+      std::string base64(iter.second);
+      base64.shrink_to_fit();
+
+      std::string decoded = base64_decode(base64, true);
+
+      results.push_back(person.run(decoded.data(), decoded.length(), iter.first));
+    }
+    combineJsonResults(results, replyData);
+
+    std::string stringReplyData = replyData.str();
+
+    SISD::HistoryStorage::JobHandle handle = SISD::HistoryStorage::getInstance().generateHandle();
+    SISD::HistoryStorage::getInstance().save(handle, stringReplyData);
+
+    rep.content.append(stringReplyData);
+    
+    rep.status = reply::ok;
+    rep.headers.resize(2);
+    rep.headers[0].name = "Content-Length";
+    rep.headers[0].value = boost::lexical_cast<std::string>(rep.content.size());
+    rep.headers[1].name = "Content-Type";
+    rep.headers[1].value = mime_types::extension_to_type("json");
   }
-  if(boundary==""){
+  else if(request_path == "/history"){
+    std::unordered_map<std::string, std::string> history;
+    SISD::HistoryStorage::getInstance().getAll(history);
+
+    std::stringstream replyData;
+    for(const auto& iter : history){
+      replyData << iter.second;
+    }
+    rep.content.append(replyData.str());
+
+    rep.status = reply::ok;
+    rep.headers.resize(2);
+    rep.headers[0].name = "Content-Length";
+    rep.headers[0].value = boost::lexical_cast<std::string>(rep.content.size());
+    rep.headers[1].name = "Content-Type";
+    rep.headers[1].value = mime_types::extension_to_type("json");
+
+  }
+  else{
     rep = reply::stock_reply(reply::bad_request);
     return;
   }
-
-  std::unordered_map<std::string, std::string> images;
-  if(!retrieveImages(boundary, req.jsonData, images)){
-    rep = reply::stock_reply(reply::bad_request);
-    return;
-  }
-
-  SISD::PersonPipeline person;
-  person.init();
-
-  std::vector<std::string> results;
-  std::stringstream replyData;
-  for(const auto& iter : images){
-    std::cout<<"Filename: "<<iter.first<<std::endl;
-    std::cout<<"Image data: "<<std::endl;
-    std::cout<<iter.second<<std::endl;
-
-    std::string base64(iter.second);
-    base64.shrink_to_fit();
-
-    std::string decoded = base64_decode(base64, true);
-
-    results.push_back(person.run(decoded.data(), decoded.length(), iter.first));
-  }
-  combineJsonResults(results, replyData);
-
-  std::string stringReplyData = replyData.str();
-  // rep.content.append("jsonDataBegin:\n");
-  rep.content.append(stringReplyData);
-  // rep.content.append("jsonDataEnd.");
-  
-  rep.status = reply::ok;
-  rep.headers.resize(2);
-  rep.headers[0].name = "Content-Length";
-  rep.headers[0].value = boost::lexical_cast<std::string>(rep.content.size());
-  rep.headers[1].name = "Content-Type";
-  rep.headers[1].value = mime_types::extension_to_type("json");
 }
 
 bool request_handler::url_decode(const std::string& in, std::string& out)

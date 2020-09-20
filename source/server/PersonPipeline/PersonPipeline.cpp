@@ -885,29 +885,8 @@ std::string PersonPipeline::Impl::run(const char* input, std::size_t size, const
         auto total_t0 = std::chrono::high_resolution_clock::now();
         slog::info << "Start inference " << slog::endl;
 
-        // std::cout << "To close the application, press 'CTRL+C' here";
-        // if (!FLAGS_no_show) {
-        //     std::cout << " or switch to the output window and press ESC key";
-        // }
-        // std::cout << std::endl;
-
-        // cv::Size graphSize{static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH) / 4), 60};
-        // Presenter presenter(FLAGS_u, static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT)) - graphSize.height - 10, graphSize);
-
         do {
-            // get and enqueue the next frame (in case of video)
-            // if (isVideo && !cap.read(frame)) {
-            //     if (frame.empty())
-            //         break;  // end of video file
-            //     throw std::logic_error("Failed to get frame from cv::VideoCapture");
-            // }
-            // if (FLAGS_auto_resize) {
-            //     // just wrap Mat object with Blob::Ptr without additional memory allocation
-            //     frameBlob = wrapMat2Blob(frame);
-            //     personDetection.setRoiBlob(frameBlob);
-            // } else {
-                m_personDetection.enqueue(frame);
-            // }
+            m_personDetection.enqueue(frame);
             // --------------------------- Run Person detection inference --------------------------------------
             auto t0 = std::chrono::high_resolution_clock::now();
             m_personDetection.submitRequest();
@@ -924,156 +903,77 @@ std::string PersonPipeline::Impl::run(const char* input, std::size_t size, const
             Result res;
             for (auto && result : m_personDetection.results) {
                 if (result.label == 1) {  // person
-                    // if (FLAGS_auto_resize) {
-                    //     cropRoi.posX = (result.location.x < 0) ? 0 : result.location.x;
-                    //     cropRoi.posY = (result.location.y < 0) ? 0 : result.location.y;
-                    //     cropRoi.sizeX = std::min((size_t) result.location.width, width - cropRoi.posX);
-                    //     cropRoi.sizeY = std::min((size_t) result.location.height, height - cropRoi.posY);
-                    //     roiBlob = make_shared_blob(frameBlob, cropRoi);
-                    // } else {
-                        // To crop ROI manually and allocate required memory (cv::Mat) again
-                        auto clippedRect = result.location & cv::Rect(0, 0, width, height);
-                        person = frame(clippedRect);
-                    // }
+                    auto clippedRect = result.location & cv::Rect(0, 0, width, height);
+                    person = frame(clippedRect);
+
                     PersonAttribsDetection::AttributesAndColorPoints resPersAttrAndColor;
                     std::string resPersReid = "";
                     cv::Point top_color_p;
                     cv::Point bottom_color_p;
 
-                    // if (personAttribs.enabled()) {
-                    if(true){
-                        // --------------------------- Run Person Attributes Recognition -----------------------
-                        // if (FLAGS_auto_resize) {
-                        //     personAttribs.setRoiBlob(roiBlob);
-                        // } else {
-                            m_personAttribs.enqueue(person);
-                        // }
 
-                        t0 = std::chrono::high_resolution_clock::now();
-                        m_personAttribs.submitRequest();
-                        m_personAttribs.wait();
-                        t1 = std::chrono::high_resolution_clock::now();
-                        personAttribsNetworkTime += std::chrono::duration_cast<ms>(t1 - t0);
-                        personAttribsInferred++;
-                        // --------------------------- Process outputs -----------------------------------------
+                    // --------------------------- Run Person Attributes Recognition -----------------------
+                    m_personAttribs.enqueue(person);
 
-                        resPersAttrAndColor = m_personAttribs.GetPersonAttributes();
+                    t0 = std::chrono::high_resolution_clock::now();
+                    m_personAttribs.submitRequest();
+                    m_personAttribs.wait();
+                    t1 = std::chrono::high_resolution_clock::now();
+                    personAttribsNetworkTime += std::chrono::duration_cast<ms>(t1 - t0);
+                    personAttribsInferred++;
+                    // --------------------------- Process outputs -----------------------------------------
 
-                        top_color_p.x = static_cast<int>(resPersAttrAndColor.top_color_point.x) * person.cols;
-                        top_color_p.y = static_cast<int>(resPersAttrAndColor.top_color_point.y) * person.rows;
+                    resPersAttrAndColor = m_personAttribs.GetPersonAttributes();
 
-                        bottom_color_p.x = static_cast<int>(resPersAttrAndColor.bottom_color_point.x) * person.cols;
-                        bottom_color_p.y = static_cast<int>(resPersAttrAndColor.bottom_color_point.y) * person.rows;
+                    top_color_p.x = static_cast<int>(resPersAttrAndColor.top_color_point.x) * person.cols;
+                    top_color_p.y = static_cast<int>(resPersAttrAndColor.top_color_point.y) * person.rows;
+
+                    bottom_color_p.x = static_cast<int>(resPersAttrAndColor.bottom_color_point.x) * person.cols;
+                    bottom_color_p.y = static_cast<int>(resPersAttrAndColor.bottom_color_point.y) * person.rows;
 
 
-                        cv::Rect person_rect(0, 0, person.cols, person.rows);
+                    cv::Rect person_rect(0, 0, person.cols, person.rows);
 
-                        // Define area around top color's location
-                        cv::Rect tc_rect;
-                        tc_rect.x = top_color_p.x - person.cols / 6;
-                        tc_rect.y = top_color_p.y - person.rows / 10;
-                        tc_rect.height = 2 * person.rows / 8;
-                        tc_rect.width = 2 * person.cols / 6;
+                    // Define area around top color's location
+                    cv::Rect tc_rect;
+                    tc_rect.x = top_color_p.x - person.cols / 6;
+                    tc_rect.y = top_color_p.y - person.rows / 10;
+                    tc_rect.height = 2 * person.rows / 8;
+                    tc_rect.width = 2 * person.cols / 6;
 
-                        tc_rect = tc_rect & person_rect;
+                    tc_rect = tc_rect & person_rect;
 
-                        // Define area around bottom color's location
-                        cv::Rect bc_rect;
-                        bc_rect.x = bottom_color_p.x - person.cols / 6;
-                        bc_rect.y = bottom_color_p.y - person.rows / 10;
-                        bc_rect.height =  2 * person.rows / 8;
-                        bc_rect.width = 2 * person.cols / 6;
+                    // Define area around bottom color's location
+                    cv::Rect bc_rect;
+                    bc_rect.x = bottom_color_p.x - person.cols / 6;
+                    bc_rect.y = bottom_color_p.y - person.rows / 10;
+                    bc_rect.height =  2 * person.rows / 8;
+                    bc_rect.width = 2 * person.cols / 6;
 
-                        bc_rect = bc_rect & person_rect;
+                    bc_rect = bc_rect & person_rect;
 
-                        resPersAttrAndColor.top_color = PersonAttribsDetection::GetAvgColor(person(tc_rect));
-                        resPersAttrAndColor.bottom_color = PersonAttribsDetection::GetAvgColor(person(bc_rect));
-                    }
-                    // if (personReId.enabled()) {
-                    //     // --------------------------- Run Person Reidentification -----------------------------
-                    //     if (FLAGS_auto_resize) {
-                    //         personReId.setRoiBlob(roiBlob);
-                    //     } else {
-                    //         personReId.enqueue(person);
-                    //     }
-
-                    //     t0 = std::chrono::high_resolution_clock::now();
-                    //     personReId.submitRequest();
-                    //     personReId.wait();
-                    //     t1 = std::chrono::high_resolution_clock::now();
-
-                    //     personReIdNetworktime += std::chrono::duration_cast<ms>(t1 - t0);
-                    //     personReIdInferred++;
-
-                    //     auto reIdVector = personReId.getReidVec();
-
-                    //     /* Check cosine similarity with all previously detected persons.
-                    //        If it's new person it is added to the global Reid vector and
-                    //        new global ID is assigned to the person. Otherwise, ID of
-                    //        matched person is assigned to it. */
-                    //     auto foundId = personReId.findMatchingPerson(reIdVector);
-                    //     resPersReid = "REID: " + std::to_string(foundId);
-                    // }
+                    resPersAttrAndColor.top_color = PersonAttribsDetection::GetAvgColor(person(tc_rect));
+                    resPersAttrAndColor.bottom_color = PersonAttribsDetection::GetAvgColor(person(bc_rect));
 
                     // --------------------------- Process outputs -----------------------------------------
                     if (!resPersAttrAndColor.attributes_strings.empty()) {
-                        // cv::Rect image_area(0, 0, frame.cols, frame.rows);
-                        // cv::Rect tc_label(result.location.x + result.location.width, result.location.y,
-                        //                   result.location.width / 4, result.location.height / 2);
-                        // cv::Rect bc_label(result.location.x + result.location.width, result.location.y + result.location.height / 2,
-                        //                     result.location.width / 4, result.location.height / 2);
-
-                        // frame(tc_label & image_area) = resPersAttrAndColor.top_color;
-                        // frame(bc_label & image_area) = resPersAttrAndColor.bottom_color;
-
-                        // for (size_t i = 0; i < resPersAttrAndColor.attributes_strings.size(); ++i) {
-                        //     cv::Scalar color;
-                        //     if (resPersAttrAndColor.attributes_indicators[i]) {
-                        //         color = cv::Scalar(0, 255, 0);
-                        //     } else {
-                        //         color = cv::Scalar(0, 0, 255);
-                        //     }
-                        //     cv::putText(frame,
-                        //             resPersAttrAndColor.attributes_strings[i],
-                        //             cv::Point2f(static_cast<float>(result.location.x + 5 * result.location.width / 4),
-                        //                         static_cast<float>(result.location.y + 15 + 15 * i)),
-                        //             cv::FONT_HERSHEY_COMPLEX_SMALL,
-                        //             0.5,
-                        //             color);
-                        // }
-
-                        // if (FLAGS_r) {
-                            std::string output_attribute_string;
-                            for (size_t i = 0; i < resPersAttrAndColor.attributes_strings.size(); ++i)
-                                if (resPersAttrAndColor.attributes_indicators[i])
-                                    output_attribute_string += resPersAttrAndColor.attributes_strings[i] + ",";
-                            std::cout << "Person ROI: " << result.location.x << ", " << result.location.y << ". "
-                                << result.location.width << ", " << result.location.height << std::endl;
-                            std::cout << "Person Attributes results: " << output_attribute_string << std::endl;
-                            std::cout << "Person top color: " << resPersAttrAndColor.top_color << std::endl;
-                            std::cout << "Person bottom color: " << resPersAttrAndColor.bottom_color << std::endl;
-                            ROI roi;
-                            roi.x = result.location.x;
-                            roi.y = result.location.y;
-                            roi.w = result.location.width;
-                            roi.h = result.location.height;
-                            roi.attrib = output_attribute_string;
-                            res.rois.push_back(roi);
-                        // }
+                        std::string output_attribute_string;
+                        for (size_t i = 0; i < resPersAttrAndColor.attributes_strings.size(); ++i)
+                            if (resPersAttrAndColor.attributes_indicators[i])
+                                output_attribute_string += resPersAttrAndColor.attributes_strings[i] + ",";
+                        std::cout << "Person ROI: " << result.location.x << ", " << result.location.y << ". "
+                            << result.location.width << ", " << result.location.height << std::endl;
+                        std::cout << "Person Attributes results: " << output_attribute_string << std::endl;
+                        std::cout << "Person top color: " << resPersAttrAndColor.top_color << std::endl;
+                        std::cout << "Person bottom color: " << resPersAttrAndColor.bottom_color << std::endl;
+                        ROI roi;
+                        roi.x = result.location.x;
+                        roi.y = result.location.y;
+                        roi.w = result.location.width;
+                        roi.h = result.location.height;
+                        roi.attrib = output_attribute_string;
+                        res.rois.push_back(roi);
                     }
-                    // if (!resPersReid.empty()) {
-                    //     cv::putText(frame,
-                    //                 resPersReid,
-                    //                 cv::Point2f(static_cast<float>(result.location.x), static_cast<float>(result.location.y + 30)),
-                    //                 cv::FONT_HERSHEY_COMPLEX_SMALL,
-                    //                 0.6,
-                    //                 cv::Scalar(255, 255, 255));
-
-                    //     if (FLAGS_r) {
-                    //         std::cout << "Person Reidentification results:" << resPersReid << std::endl;
-                    //     }
-                    // }
-                    // cv::rectangle(frame, result.location, cv::Scalar(0, 255, 0), 1);
                 }
             }
             res.imageName = imageName;
@@ -1176,7 +1076,8 @@ std::string PersonPipeline::Impl::constructJsonMessage(const ResultVec& results)
             frameNode.push_back(std::make_pair("", roiNode));
         }
         if(!frameNode.empty()){
-            jsonTree.add_child(frame.imageName, frameNode);
+            // jsonTree.add_child(frame.imageName, frameNode);
+            jsonTree.push_back(std::make_pair(frame.imageName, frameNode));
         }
     }
 

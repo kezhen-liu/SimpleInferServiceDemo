@@ -21,7 +21,7 @@ sisdOption parseArguments(int argc, char* argv[])
     opt_desc.add_options()
         ("help,h", "Produce this help message")
         ("image,i", value<std::vector<std::string>>(), "Input image to be inferenced. Can specify multiple times")
-        ("type,t", value<std::string>(), "Request type. Value could be predict or history. Currently only predict is supported");
+        ("type,t", value<std::string>(), "Request type. Value could be predict or history");
 
     store(parse_command_line(argc, argv, opt_desc), vm);
     notify(vm);
@@ -39,8 +39,6 @@ sisdOption parseArguments(int argc, char* argv[])
         }
         else if(type == "history"){
             ret.type = sisdOption::History;
-            std::cout<< "Currently the history query is not supported. Exit" << std::endl;
-            exit(0);
         }
         else{
             std::cout<< "Invalid request type. Value could be predict or history. Exit" << std::endl;
@@ -67,7 +65,7 @@ int main(int argc, char* argv[]){
 
     SISD::Client client;
 
-    SISD::Client::Request req = client.formRequest(opt.images, SISD::Client::Person);
+    SISD::Client::Request req = client.formRequest(opt.images, opt.type == sisdOption::Predict ? SISD::Client::Person : SISD::Client::History);
 
     if(!req){
         std::cerr << "Not a valid request!"<<std::endl;
