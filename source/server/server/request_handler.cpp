@@ -27,43 +27,6 @@
 #include <common/utility/base64.h>
 #include <server/database/historyStorage.hpp>
 
-// namespace AiInferenceServer
-// {
-//   typedef int Status_t;
-//   Status_t Run(std::vector<std::string>& mediaUri, std::string& pipelineConfig, void*& result, size_t& resultSize)
-//   {
-//     std::cout << "Calling the pipeline manager !!!! " << std::endl;
-//     PipelineManager pipMgr;
-//     std::shared_ptr<std::thread> sp_pipelineThread(new std::thread(&PipelineManager::runPipeline, &pipMgr));
-//     sp_pipelineThread.get()->join();
-
-//     std::vector<FrameData> resultDataVector = pipMgr.getData();
-//     int resultDataVectorSize = resultDataVector.size();
-//     int resultFeatureSize = resultDataVector[0].frameFeature.size();
-//     resultSize = resultDataVectorSize * resultFeatureSize * 4;
-//     float * buffer  =  (float*)malloc(resultSize);
-//     if (buffer == NULL)
-//         exit (1);
-
-//     std::cout<< "total feature number: " << resultDataVectorSize << " feature size: "<< resultFeatureSize << " Buffer Size : "<< resultSize << std::endl;
-    
-//     for(unsigned dataIndex(0); dataIndex < resultDataVectorSize; ++dataIndex ){
-//         FrameData tmpFrameData = resultDataVector[dataIndex];
-
-//         int featureSize =  tmpFrameData.frameFeature.size();
-//         for(unsigned i =0; i< featureSize; ++i){
-//             const auto& frameFeature = tmpFrameData.frameFeature;
-//             buffer[dataIndex * resultFeatureSize + i] = frameFeature[i];
-//         }
-//     }
-//     resultDataVector.clear();
-
-//     result = static_cast<void*>(buffer);
-//     return 0;
-//   }
-
-// }
-
 namespace http {
 namespace server {
 
@@ -91,7 +54,11 @@ void request_handler::handle_request(const request& req, reply& rep)
   }
 
   if(request_path == "/predict"){
+    // in case of predict route
     std::string boundary = "";
+
+    // as the http request transmit multiple images in form of multipart message
+    //  we need to find out what the boundary is
     for(const auto& iter : req.headers){
       if(iter.name == "Content-Type"){
         if(!retrieveMultipartBoundary(iter.value, boundary)){
@@ -105,36 +72,44 @@ void request_handler::handle_request(const request& req, reply& rep)
       return;
     }
 
+    // with known boundary, we extract the image data encoded in base64
     std::unordered_map<std::string, std::string> images;
     if(!retrieveImages(boundary, req.jsonData, images)){
       rep = reply::stock_reply(reply::bad_request);
       return;
     }
 
+    // start and init the person pipeline, which consists of a detection 
+    //  network and a person attribute classification network
     SISD::PersonPipeline person;
     person.init();
 
     std::vector<std::string> results;
     std::stringstream replyData;
     for(const auto& iter : images){
-      std::cout<<"Filename: "<<iter.first<<std::endl;
-      std::cout<<"Image data: "<<std::endl;
-      std::cout<<iter.second<<std::endl;
+      // std::cout<<"Filename: "<<iter.first<<std::endl;
+      // std::cout<<"Image data: "<<std::endl;
+      // std::cout<<iter.second<<std::endl;
 
       std::string base64(iter.second);
       base64.shrink_to_fit();
 
+      // decode base64 to raw binary in form of its original image format
       std::string decoded = base64_decode(base64, true);
 
+      // run the pipeline
       results.push_back(person.run(decoded.data(), decoded.length(), iter.first));
     }
+    // we combine results from batch of images together to a single string
     combineJsonResults(results, replyData);
 
     std::string stringReplyData = replyData.str();
 
+    // generate a unique storage handle and save to history storage
     SISD::HistoryStorage::JobHandle handle = SISD::HistoryStorage::getInstance().generateHandle();
     SISD::HistoryStorage::getInstance().save(handle, stringReplyData);
 
+    // make reply
     rep.content.append(stringReplyData);
     
     rep.status = reply::ok;
@@ -145,9 +120,13 @@ void request_handler::handle_request(const request& req, reply& rep)
     rep.headers[1].value = mime_types::extension_to_type("json");
   }
   else if(request_path == "/history"){
+    // in case of a history route
+
+    // we retrieve all records in database
     std::unordered_map<std::string, std::string> history;
     SISD::HistoryStorage::getInstance().getAll(history);
 
+    // make reply
     std::stringstream replyData;
     for(const auto& iter : history){
       replyData << iter.second;
@@ -163,6 +142,7 @@ void request_handler::handle_request(const request& req, reply& rep)
 
   }
   else{
+    // invalid route
     rep = reply::stock_reply(reply::bad_request);
     return;
   }

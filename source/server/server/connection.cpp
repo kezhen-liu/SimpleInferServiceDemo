@@ -37,12 +37,6 @@ void connection::start()
       boost::bind(&connection::handle_read, shared_from_this(),
         boost::asio::placeholders::error,
         boost::asio::placeholders::bytes_transferred));
-  // boost::asio::async_read(socket_, boost::asio::buffer(buffer_), //to-do : check here
-  //     boost::asio::transfer_all(),
-  //     boost::bind(&connection::handle_read, shared_from_this(),
-  //       boost::asio::placeholders::error,
-  //       boost::asio::placeholders::bytes_transferred));
-
 }
 
 void connection::stop()
@@ -54,7 +48,7 @@ void connection::handle_read(const boost::system::error_code& e,
     std::size_t bytes_transferred)
 {
 
-  std::cout<<"Handle read receives "<<bytes_transferred<<std::endl;
+  // std::cout<<"Handle read receives "<<bytes_transferred<<std::endl;
   if (!e)
   {
     boost::tribool result;
@@ -63,9 +57,9 @@ void connection::handle_read(const boost::system::error_code& e,
 
     if (result)
     {
-      std::cout<<"\r\n\r\nbody received"<<std::endl;
-      std::cout<<request_.jsonData<<std::endl;
-      std::cout<<"end\r\n\r\n"<<std::endl;
+      // std::cout<<"\r\n\r\nbody received"<<std::endl;
+      // std::cout<<request_.jsonData<<std::endl;
+      // std::cout<<"end\r\n\r\n"<<std::endl;
 
       request_handler_.handle_request(request_, reply_);
       boost::asio::async_write(socket_, reply_.to_buffers(),

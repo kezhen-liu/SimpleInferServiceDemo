@@ -222,17 +222,17 @@ std::string Client::Impl::sendRequest(const Client::Request& req){
             request_stream << "Connection: close\r\n\r\n";
             request_stream << stringRequestData;
 
-            std::stringstream testss;
-            testss << "POST " << "/predict" << " HTTP/1.0\r\n";
-            // testss << "Host: " << "localhost" << "\r\n";
-            testss << "Accept: */*\r\n";
-            testss << "Content-Length: " << stringRequestData.length() << "\r\n";
-            testss << "Content-Type: multipart/form-data; boundary=77580b83-390b-4c34-8393-4eac360c7b42\r\n";
-            testss << "Connection: close\r\n\r\n";
-            testss << stringRequestData;
+            // std::stringstream testss;
+            // testss << "POST " << "/predict" << " HTTP/1.0\r\n";
+            // // testss << "Host: " << "localhost" << "\r\n";
+            // testss << "Accept: */*\r\n";
+            // testss << "Content-Length: " << stringRequestData.length() << "\r\n";
+            // testss << "Content-Type: multipart/form-data; boundary=77580b83-390b-4c34-8393-4eac360c7b42\r\n";
+            // testss << "Connection: close\r\n\r\n";
+            // testss << stringRequestData;
 
-            std::cout<<"\r\n\r\nGoing to send "<<testss.str().length()<< std::endl;
-            std::cout<<testss.str()<<"end\r\n\r\n"<<std::endl;
+            // std::cout<<"\r\n\r\nGoing to send "<<testss.str().length()<< std::endl;
+            // std::cout<<testss.str()<<"end\r\n\r\n"<<std::endl;
 
             // Send the request.
             boost::asio::write(socket, request);
@@ -267,14 +267,14 @@ std::string Client::Impl::sendRequest(const Client::Request& req){
             request_stream << "Accept: */*\r\n";
             request_stream << "Connection: close\r\n\r\n";
 
-            std::stringstream testss;
-            testss << "GET " << "/history" << " HTTP/1.0\r\n";
-            // testss << "Host: " << "localhost" << "\r\n";
-            testss << "Accept: */*\r\n";
-            testss << "Connection: close\r\n\r\n";
+            // std::stringstream testss;
+            // testss << "GET " << "/history" << " HTTP/1.0\r\n";
+            // // testss << "Host: " << "localhost" << "\r\n";
+            // testss << "Accept: */*\r\n";
+            // testss << "Connection: close\r\n\r\n";
 
-            std::cout<<"\r\n\r\nGoing to send "<<testss.str().length()<< std::endl;
-            std::cout<<testss.str()<<"end\r\n\r\n"<<std::endl;
+            // std::cout<<"\r\n\r\nGoing to send "<<testss.str().length()<< std::endl;
+            // std::cout<<testss.str()<<"end\r\n\r\n"<<std::endl;
 
             // Send the request.
             boost::asio::write(socket, request);

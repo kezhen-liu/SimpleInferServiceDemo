@@ -39,32 +39,6 @@ public:
   boost::tuple<boost::tribool, InputIterator> parse(request& req,
       InputIterator begin, InputIterator end)
   {
-    // std::string receivedData = begin;
-    // std::size_t jsonDataBegin = receivedData.find_first_of("{");
-    // std::size_t jsonDataEnd = receivedData.find_last_of("}");
-    // req.jsonData = receivedData.substr(jsonDataBegin,(jsonDataEnd - jsonDataBegin + 1));
-
-    // while (begin != end)
-    // {
-    //   boost::tribool result = consume(req, *begin++);
-    //   if (result || !result)
-    //     return boost::make_tuple(result, begin);
-    // }
-    // boost::tribool result = boost::indeterminate;
-    // return boost::make_tuple(result, begin);
-
-    // std::string receivedData = begin;
-
-    // std::cout<<"Received length "<<end-begin<<std::endl;
-    // std::cout<<"\r\n\r\ndata received"<<std::endl;
-    // std::cout<<receivedData<<std::endl;
-    // std::cout<<"end\r\n\r\n"<<std::endl;
-
-    // std::size_t jsonDataBegin = receivedData.find_first_of("\r\n\r\n")+4;
-    // std::size_t jsonDataEnd = receivedData.find_last_of("\r\n")+2;
-    // req.jsonData = receivedData.substr(jsonDataBegin,(jsonDataEnd - jsonDataBegin));
-
-    // end -= jsonDataEnd - jsonDataBegin;
     while (begin != end)
     {
       boost::tribool result = consume(req, *begin++);

@@ -66,7 +66,6 @@ void server::start_accept()
 
 void server::handle_accept(const boost::system::error_code& e)
 {
-  std::cout<<"start to handle accept!!!!!!!!!!!!"<< std::endl;
   // Check whether the server was stopped by a signal before this completion
   // handler had a chance to run.
   if (!acceptor_.is_open())
