@@ -13,7 +13,7 @@ public:
 
     bool init();
 
-    std::string run(const char* input, std::size_t size);
+    std::string run(const char* input, std::size_t size, const std::string& imageName);
 
 private:
     class Impl;

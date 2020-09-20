@@ -124,7 +124,7 @@ void request_handler::handle_request(const request& req, reply& rep)
 
     std::string decoded = base64_decode(base64, true);
 
-    results.push_back(person.run(decoded.data(), decoded.length()));
+    results.push_back(person.run(decoded.data(), decoded.length(), iter.first));
   }
   combineJsonResults(results, replyData);
 

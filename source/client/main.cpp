@@ -1,65 +1,73 @@
-#include <fstream>
 #include <iostream>
+#include <boost/program_options.hpp>
 
 #include <client/client.hpp>
 
-// #include <common/utility/base64.h>
+struct sisdOption{
+    enum{
+        Predict,
+        History
+    } type;
 
-// int main(){
+    std::vector<std::string> images;
+};
 
-//     std::cout<<"Test start"<<std::endl;
+sisdOption parseArguments(int argc, char* argv[])
+{
+    using namespace boost::program_options;
     
-//     std::ifstream fileIn("3.jpeg", std::ios::binary | std::ios::ate);
-//     if(!fileIn){
-//         std::cerr << "Unable to open file!" << std::endl;
-//         exit(0);
-//     }
-//     std::streamsize size = fileIn.tellg();
-//     fileIn.seekg(0, std::ios::beg);
+    variables_map vm;
+    options_description opt_desc("This is a Simple Inference Service Demo (SISD).\n\nExample usages: SISDClient -i 1.jpeg -i 2.jpeg\n\nOptions");
+    opt_desc.add_options()
+        ("help,h", "Produce this help message")
+        ("image,i", value<std::vector<std::string>>(), "Input image to be inferenced. Can specify multiple times")
+        ("type,t", value<std::string>(), "Request type. Value could be predict or history. Currently only predict is supported");
 
-//     char* data = new char[size];
-//     if (!fileIn.read(data, size))
-//     {
-//         std::cerr << "Error reading contents!" << std::endl;
-//         exit(0);
-//     }
+    store(parse_command_line(argc, argv, opt_desc), vm);
+    notify(vm);
 
-//     std::cout<<"raw buffer size is "<<size<<std::endl;
+    if (vm.count("help")) {
+        std::cout << opt_desc << std::endl;
+        exit(0);
+    }
 
-//     std::string base64 = base64_encode(reinterpret_cast<const unsigned char*>(data), size);
+    sisdOption ret;
+    if (vm.count("type")) {
+        std::string type = vm["type"].as<std::string>();
+        if(type == "predict"){
+            ret.type = sisdOption::Predict;
+        }
+        else if(type == "history"){
+            ret.type = sisdOption::History;
+            std::cout<< "Currently the history query is not supported. Exit" << std::endl;
+            exit(0);
+        }
+        else{
+            std::cout<< "Invalid request type. Value could be predict or history. Exit" << std::endl;
+            exit(0);
+        }
+    } else {
+        std::cout << "Request type unset. Defaults to predict"<<std::endl;
+        ret.type = sisdOption::Predict;
+    }
+    if(ret.type == sisdOption::Predict){
+        if (vm.count("image")) {
+            ret.images = vm["image"].as<std::vector<std::string>>();
+        } else {
+            std::cerr << "Predict request requires at least 1 input image! Exit" << std::endl;
+            exit(0);
+        }
+    }
+    return ret;
+}
 
-//     std::cout << "Encoded length is "<<base64.length()<<std::endl;
+int main(int argc, char* argv[]){
 
-//     std::cout<<"Encoded base64 is "<<std::endl;
+    sisdOption opt = parseArguments(argc, argv);
 
-//     std::cout<<base64<<std::endl;
-
-//     std::string decoded = base64_decode(base64, true);
-
-//     std::ofstream fileOut("test.jpeg", std::ios::binary);
-
-//     std::cout << "Decoded length is " << decoded.length() <<std::endl;
-
-//     fileOut.write(decoded.data(), decoded.length());
-
-//     // or
-
-//     // fileOut<<decoded; //work
-
-//     fileOut.close();
-//     fileIn.close();
-
-
-
-//     delete[] data;
-
-//     return 0;
-// }
-
-int main(){
     SISD::Client client;
 
-    SISD::Client::Request req = client.formRequest({"3.jpeg"}, SISD::Client::Person);
+    SISD::Client::Request req = client.formRequest(opt.images, SISD::Client::Person);
 
     if(!req){
         std::cerr << "Not a valid request!"<<std::endl;

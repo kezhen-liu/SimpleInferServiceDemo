@@ -165,34 +165,36 @@ std::string Client::Impl::sendRequest(const Client::Request& req){
         boost::asio::ip::tcp::socket socket(io_context);
         boost::asio::connect(socket, endpoints);
 
-        // boost::property_tree::ptree rootInputConfig;
-        // parseFuncToJsonStr(rootInputConfig, mediaUri, pipelineConfig, result, resultSize);
-        // std::stringstream requestData;
-        // boost::property_tree::write_json(requestData, rootInputConfig);
         std::stringstream msgBody;
-        std::ifstream fileIn(req.filePath()[0], std::ios::binary | std::ios::ate);
-        if(!fileIn){
-            std::cerr << "Unable to open file!" << std::endl;
-            exit(0);
+        for(const auto& singlePath: req.filePath()){
+            boost::filesystem::path fpath(singlePath);
+            std::string shortFilename = fpath.filename().string();
+
+            std::ifstream fileIn(singlePath, std::ios::binary | std::ios::ate);
+            if(!fileIn){
+                std::cerr << "Unable to open file!" << std::endl;
+                exit(0);
+            }
+            std::streamsize size = fileIn.tellg();
+            fileIn.seekg(0, std::ios::beg);
+
+            char* data = new char[size];
+            if (!fileIn.read(data, size))
+            {
+                std::cerr << "Error reading contents!" << std::endl;
+                exit(0);
+            }
+            fileIn.close();
+
+            std::string base64 = base64_encode(reinterpret_cast<const unsigned char*>(data), size);
+
+            delete[] data;
+
+            msgBody << "--77580b83-390b-4c34-8393-4eac360c7b42\r\n";
+            msgBody << "Content-Disposition: form-data; name=\"datafile\"; filename=\"" << shortFilename <<"\"\r\n";
+            msgBody << "Content-Type: image/jpeg\r\n\r\n";
+            msgBody << base64 << "\r\n";
         }
-        std::streamsize size = fileIn.tellg();
-        fileIn.seekg(0, std::ios::beg);
-
-        char* data = new char[size];
-        if (!fileIn.read(data, size))
-        {
-            std::cerr << "Error reading contents!" << std::endl;
-            exit(0);
-        }
-
-        std::string base64 = base64_encode(reinterpret_cast<const unsigned char*>(data), size);
-
-        delete[] data;
-
-        msgBody << "--77580b83-390b-4c34-8393-4eac360c7b42\r\n";
-        msgBody << "Content-Disposition: form-data; name=\"datafile1\"; filename=\"" << req.filePath()[0] <<"\"\r\n";
-        msgBody << "Content-Type: image/jpeg\r\n\r\n";
-        msgBody << base64 << "\r\n";
         msgBody << "--77580b83-390b-4c34-8393-4eac360c7b42--\r\n";
 
         std::string stringRequestData = msgBody.str();

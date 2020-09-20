@@ -490,7 +490,7 @@ public:
 
     bool init();
 
-    std::string run(const char* input, std::size_t size);
+    std::string run(const char* input, std::size_t size, const std::string& imageName);
 
 private:
     std::string constructJsonMessage(const ResultVec& results) const;
@@ -864,7 +864,7 @@ bool PersonPipeline::Impl::init(){
     return true;
 }
 
-std::string PersonPipeline::Impl::run(const char* input, std::size_t size){
+std::string PersonPipeline::Impl::run(const char* input, std::size_t size, const std::string& imageName){
     std::string jsonOut = "";
     try{
         ::cv::Mat rawData( 1, size, CV_8UC1, (void*)input );
@@ -1076,7 +1076,7 @@ std::string PersonPipeline::Impl::run(const char* input, std::size_t size){
                     // cv::rectangle(frame, result.location, cv::Scalar(0, 255, 0), 1);
                 }
             }
-            res.imageName = "TestName";
+            res.imageName = imageName;
             jsonOut = constructJsonMessage(ResultVec{res});
             std::cout << jsonOut << std::endl;
 
@@ -1202,7 +1202,7 @@ bool PersonPipeline::init(){
     return m_impl->init();
 }
 
-std::string PersonPipeline::run(const char* input, std::size_t size){
-    return m_impl->run(input, size);
+std::string PersonPipeline::run(const char* input, std::size_t size, const std::string& imageName){
+    return m_impl->run(input, size, imageName);
 }
 }

@@ -26,7 +26,7 @@ if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
   endif()
 endif()
 
-find_package(Boost 1.71.0 REQUIRED COMPONENTS filesystem)
+find_package(Boost 1.71.0 REQUIRED COMPONENTS filesystem program_options)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
