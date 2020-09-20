@@ -297,6 +297,7 @@ boost::tribool request_parser::consume(request& req, char input)
     }
   case body_content_normal:
     if(input == '\r'){
+      req.jsonData.push_back(input);
       state_ = body_content_expect_newline;
       contentCtr++;
       return boost::indeterminate;
@@ -312,6 +313,7 @@ boost::tribool request_parser::consume(request& req, char input)
     }
   case body_content_expect_newline:
     if(input == '\n'){
+      req.jsonData.push_back(input);
       contentCtr++;
       // check if counter reaches expected length
       if(contentCtr >= expectedContentLength){

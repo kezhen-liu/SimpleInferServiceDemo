@@ -80,10 +80,36 @@ void request_handler::handle_request(const request& req, reply& rep)
   std::cout<<"Received HTTP method: "<< req.method << std::endl;
   // Request path must be absolute and not contain "..".
   if (request_path.empty() || request_path[0] != '/'
-      || request_path.find("..") != std::string::npos)
+      || request_path.find("..") != std::string::npos || request_path != "/predict")
   {
     rep = reply::stock_reply(reply::bad_request);
     return;
+  }
+
+  std::string boundary = "";
+  for(const auto& iter : req.headers){
+    if(iter.name == "Content-Type"){
+      if(!retrieveMultipartBoundary(iter.value, boundary)){
+        rep = reply::stock_reply(reply::bad_request);
+        return;
+      }
+    }
+  }
+  if(boundary==""){
+    rep = reply::stock_reply(reply::bad_request);
+    return;
+  }
+
+  std::unordered_map<std::string, std::string> images;
+  if(!retrieveImages(boundary, req.jsonData, images)){
+    rep = reply::stock_reply(reply::bad_request);
+    return;
+  }
+
+  for(const auto& iter : images){
+    std::cout<<"Filename: "<<iter.first<<std::endl;
+    std::cout<<"Image data: "<<std::endl;
+    std::cout<<iter.second<<std::endl;
   }
 
   // std::cout<<"\r\n\r\n"<<std::endl;
@@ -186,6 +212,113 @@ bool request_handler::url_decode(const std::string& in, std::string& out)
       out += in[i];
     }
   }
+  return true;
+}
+
+bool request_handler::retrieveMultipartBoundary(const std::string& in, std::string& out){
+  out.clear();
+  out.reserve(in.size());
+
+  std::string::size_type startIdx = in.find("boundary=");
+  if(startIdx == std::string::npos){
+    return false;
+  }
+  startIdx += 9;
+
+  std::string::size_type endIdx = in.find_first_of("/r ;", startIdx);
+  if(endIdx == std::string::npos){
+    endIdx = in.length();
+  }
+  out = in.substr(startIdx, endIdx-startIdx+1);
+  std::cout << "Found boundary: "<<out<<std::endl;
+  return true;
+}
+
+bool request_handler::retrieveImages(const std::string& boundary, const std::string& in, std::unordered_map<std::string, std::string>& out){
+  out.clear();
+  out.reserve(in.size());
+
+  const std::string boundary_rn = "--" + boundary + "\r\n";
+  const std::string boundary_end_rn = "--" + boundary + "--\r\n";
+
+  std::string::size_type currentIdx = in.find(boundary_rn, 0);
+  if(currentIdx == std::string::npos){
+    return false;
+  }
+  currentIdx += boundary_rn.length();
+
+  // find the next boundary
+  std::string::size_type partEndIdx = in.find(boundary_rn, currentIdx);
+  while(partEndIdx != std::string::npos){
+    std::string part = in.substr(currentIdx, partEndIdx-currentIdx+1);
+
+    // find filename and content here
+    std::string filename;
+    if(!retrieveFilenameFromMultiPartMessage(part, filename)){
+      return false;
+    }
+
+    std::string base64image;
+    if(!retrieveImageFromMultiPartMessage(part, base64image)){
+      return false;
+    }
+    out[filename] = base64image;
+
+    currentIdx = partEndIdx + boundary_rn.length();
+    partEndIdx = in.find(boundary_rn, currentIdx);
+  }
+
+  // no boundary_rn any more, try find the boundary_end_rn
+  partEndIdx = in.find(boundary_end_rn, currentIdx);
+  std::string lastPart = in.substr(currentIdx, partEndIdx-currentIdx+1);
+
+  // find filename and content here
+  std::string filename;
+  if(!retrieveFilenameFromMultiPartMessage(lastPart, filename)){
+    return false;
+  }
+
+  std::string base64image;
+  if(!retrieveImageFromMultiPartMessage(lastPart, base64image)){
+    return false;
+  }
+  out[filename] = base64image;
+
+  return true;
+
+}
+
+bool request_handler::retrieveFilenameFromMultiPartMessage(const std::string& in, std::string& out){
+  out.clear();
+  out.reserve(in.size());
+
+  std::string::size_type startIdx = in.find("filename=\"", 0);
+  if(startIdx == std::string::npos){
+    return false;
+  }
+  startIdx += 10;
+  std::string::size_type endIdx = in.find("\"", startIdx);
+  if(endIdx == std::string::npos){
+    return false;
+  }
+  out = in.substr(startIdx, endIdx-startIdx);
+  return true;
+}
+
+bool request_handler::retrieveImageFromMultiPartMessage(const std::string& in, std::string& out){
+  out.clear();
+  out.reserve(in.size());
+
+  std::string::size_type startIdx = in.find("\r\n\r\n", 0);
+  if(startIdx == std::string::npos){
+    return false;
+  }
+  startIdx += 4;
+  std::string::size_type endIdx = in.find("\r\n", startIdx);
+  if(endIdx == std::string::npos){
+    return false;
+  }
+  out = in.substr(startIdx, endIdx-startIdx+1);
   return true;
 }
 

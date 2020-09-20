@@ -12,6 +12,7 @@
 #define HTTP_REQUEST_HANDLER_HPP
 
 #include <string>
+#include <unordered_map>
 #include <boost/noncopyable.hpp>
 
 namespace http {
@@ -38,6 +39,14 @@ private:
   /// Perform URL-decoding on a string. Returns false if the encoding was
   /// invalid.
   static bool url_decode(const std::string& in, std::string& out);
+
+  static bool retrieveMultipartBoundary(const std::string& in, std::string& out);
+
+  static bool retrieveImages(const std::string& boundary, const std::string& in, std::unordered_map<std::string, std::string>& out);
+
+  static bool retrieveFilenameFromMultiPartMessage(const std::string& in, std::string& out);
+
+  static bool retrieveImageFromMultiPartMessage(const std::string& in, std::string& out);
 };
 
 } // namespace server

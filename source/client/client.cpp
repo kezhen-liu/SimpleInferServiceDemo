@@ -189,11 +189,11 @@ std::string Client::Impl::sendRequest(const Client::Request& req){
 
         delete[] data;
 
-        msgBody << "77580b83-390b-4c34-8393-4eac360c7b42\r\n";
+        msgBody << "--77580b83-390b-4c34-8393-4eac360c7b42\r\n";
         msgBody << "Content-Disposition: form-data; name=\"datafile1\"; filename=\"" << req.filePath()[0] <<"\"\r\n";
         msgBody << "Content-Type: image/jpeg\r\n\r\n";
         msgBody << base64 << "\r\n";
-        msgBody << "77580b83-390b-4c34-8393-4eac360c7b42--\r\n";
+        msgBody << "--77580b83-390b-4c34-8393-4eac360c7b42--\r\n";
 
         std::string stringRequestData = msgBody.str();
         
